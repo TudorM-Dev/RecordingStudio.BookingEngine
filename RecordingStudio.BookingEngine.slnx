@@ -1,0 +1,6 @@
+<Solution>
+  <Project Path="RecordingStudio.BookingEngine.Api/RecordingStudio.BookingEngine.Api.csproj" />
+  <Project Path="RecordingStudio.BookingEngine.Core/RecordingStudio.BookingEngine.Core.csproj" />
+  <Project Path="RecordingStudio.BookingEngine.Infrastructure/RecordingStudio.BookingEngine.Infrastructure.csproj" />
+  <Project Path="RecordingStudio.BookingEngine.Tests/RecordingStudio.BookingEngine.Tests.csproj" />
+</Solution>
