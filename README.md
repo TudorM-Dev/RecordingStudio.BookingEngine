@@ -100,10 +100,25 @@ The core of the project. A booking is validated against six rules:
 5. **Closures span a start/end interval** rather than whole days, which also covers the all-day case when needed.
 6. **A closure cancels overlapping bookings** — when an admin closes a studio over an interval that hits confirmed bookings, those move to `Cancelled`. Contacting the client stays a manual task.
 
+## API
+
+| Method | Route | Purpose |
+| ------ | ----- | ------- |
+| `GET`  | `/api/studios` | List studios |
+| `GET`  | `/api/studios/{id}/services` | Services the studio can offer (rule 4, computed) |
+| `GET`  | `/api/bookings/studio/{id}` | Confirmed bookings for a studio |
+| `POST` | `/api/bookings/validate` | Check a booking against every rule without saving |
+| `POST` | `/api/bookings` | Create a booking (validated, then persisted) |
+| `POST` | `/api/closures` | Register a closure; auto-cancels overlapping bookings (rule 6) |
+
+## Web UI
+
+A minimal Blazor (interactive server) page at `/` lets a client pick a studio, see only the services it offers, choose a slot and book. A SignalR hub (`/hubs/booking`) pushes booking changes so open pages refresh live — book in one tab and a second tab updates on its own.
+
 ## Layout
 
 ```
-RecordingStudio.BookingEngine.Api/              → Controllers, Program.cs
+RecordingStudio.BookingEngine.Api/              → Controllers, Blazor UI, SignalR hub, Program.cs
 RecordingStudio.BookingEngine.Core/             → Entities, Interfaces, Services (business logic)
 RecordingStudio.BookingEngine.Infrastructure/   → DbContext, Repositories (data access)
 RecordingStudio.BookingEngine.Tests/            → Unit tests (booking validation)
@@ -114,11 +129,13 @@ RecordingStudio.BookingEngine.Tests/            → Unit tests (booking validati
 ```bash
 dotnet build
 dotnet ef database update -p RecordingStudio.BookingEngine.Infrastructure -s RecordingStudio.BookingEngine.Api
-dotnet run --project RecordingStudio.BookingEngine.Api
+dotnet run --project RecordingStudio.BookingEngine.Api --launch-profile http
 dotnet test
 ```
 
-The migration step creates the local SQLite database. Moving to SQL Server means swapping the EF Core provider package, the `UseSqlite` call and the connection string — nothing else changes.
+Then open **http://localhost:5237** for the booking UI. Open it in two tabs to watch SignalR update one when you book in the other.
+
+The migration step creates the local SQLite database (seeded with two studios, some facilities and services). Moving to SQL Server means swapping the EF Core provider package, the `UseSqlite` call and the connection string — nothing else changes.
 
 ## Status
 
@@ -127,8 +144,8 @@ The migration step creates the local SQLite database. Moving to SQL Server means
 - [x] Core entities
 - [x] DbContext + EF Core migrations
 - [x] Pure validation rules + unit tests
-- [ ] Repositories
-- [ ] Data-dependent validation rules
-- [ ] API endpoints
-- [ ] Blazor frontend
-- [ ] SignalR live updates
+- [x] Repositories
+- [x] Data-dependent validation rules (all 6 rules)
+- [x] API endpoints
+- [x] Blazor frontend
+- [x] SignalR live updates

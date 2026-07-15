@@ -484,3 +484,8 @@ $RECYCLE.BIN/
 # Claude Code config - not for portfolio repo
 CLAUDE.md
 .claude/
+
+# SQLite local dev database
+*.db
+*.db-shm
+*.db-wal

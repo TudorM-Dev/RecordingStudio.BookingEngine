@@ -1,0 +1,218 @@
+@page "/"
+@rendermode InteractiveServer
+@using RecordingStudio.BookingEngine.Core.Entities
+@using RecordingStudio.BookingEngine.Core.Common
+@using RecordingStudio.BookingEngine.Core.Services
+@using RecordingStudio.BookingEngine.Api.Hubs
+@using Microsoft.AspNetCore.SignalR
+@using Microsoft.AspNetCore.SignalR.Client
+@inject StudioService StudioService
+@inject BookingService BookingService
+@inject IHubContext<BookingHub> HubContext
+@inject NavigationManager Nav
+@implements IAsyncDisposable
+
+<div class="wrap">
+    <header class="head">
+        <p class="eyebrow">Recording Studio</p>
+        <h1>Book a session</h1>
+        <p class="lede">Pick a studio, a service and a time slot. Availability updates live as other clients book.</p>
+    </header>
+
+    <div class="grid">
+        <section class="card">
+            <h2>New booking</h2>
+
+            <label class="field">
+                <span>Studio</span>
+                <select class="input" @bind="selectedStudioId" @bind:after="OnStudioChanged">
+                    @foreach (Studio s in studios)
+                    {
+                        <option value="@s.Id">@s.Name — @s.Sector</option>
+                    }
+                </select>
+            </label>
+
+            <label class="field">
+                <span>Service</span>
+                <select class="input" @bind="selectedServiceId">
+                    @foreach (ServiceType s in services)
+                    {
+                        <option value="@s.Id">@s.Name</option>
+                    }
+                </select>
+                @if (services.Count == 0)
+                {
+                    <small class="hint">This studio offers no services.</small>
+                }
+            </label>
+
+            <div class="field-row">
+                <label class="field">
+                    <span>Date</span>
+                    <input class="input" type="date" @bind="date" />
+                </label>
+                <label class="field">
+                    <span>Start</span>
+                    <select class="input" @bind="selectedTime">
+                        @foreach (string t in timeSlots)
+                        {
+                            <option value="@t">@t</option>
+                        }
+                    </select>
+                </label>
+                <label class="field">
+                    <span>Duration</span>
+                    <select class="input" @bind="duration">
+                        @for (int h = 2; h <= 8; h++)
+                        {
+                            <option value="@h">@h hours</option>
+                        }
+                    </select>
+                </label>
+            </div>
+
+            <div class="actions">
+                <button class="btn secondary" @onclick="CheckAvailability" disabled="@(services.Count == 0)">Check availability</button>
+                <button class="btn primary" @onclick="Book" disabled="@(services.Count == 0)">Book</button>
+            </div>
+
+            @if (message is not null)
+            {
+                <div class="message @(isError ? "error" : "success")">@message</div>
+            }
+        </section>
+
+        <section class="card">
+            <div class="list-head">
+                <h2>Confirmed bookings</h2>
+                <span class="live"><span class="dot"></span>live</span>
+            </div>
+
+            @if (bookings.Count == 0)
+            {
+                <p class="empty">No bookings for this studio yet.</p>
+            }
+            else
+            {
+                <ul class="bookings">
+                    @foreach (Booking b in bookings.OrderBy(b => b.StartDateTime))
+                    {
+                        <li>
+                            <span class="time">
+                                @b.StartDateTime.ToString("ddd dd MMM · HH:mm")–@b.StartDateTime.AddHours(b.DurationHours).ToString("HH:mm")
+                            </span>
+                            <span class="svc">@ServiceName(b.ServiceTypeId)</span>
+                        </li>
+                    }
+                </ul>
+            }
+        </section>
+    </div>
+</div>
+
+@code {
+    private IReadOnlyList<Studio> studios = new List<Studio>();
+    private IReadOnlyList<ServiceType> services = new List<ServiceType>();
+    private IReadOnlyList<Booking> bookings = new List<Booking>();
+
+    private int selectedStudioId;
+    private int selectedServiceId;
+    private DateTime date = DateTime.Today.AddDays(1);
+    private string selectedTime = "14:00";
+    private int duration = 2;
+
+    private string? message;
+    private bool isError;
+
+    private HubConnection? hub;
+    private readonly List<string> timeSlots = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        for (int h = 8; h <= 22; h++)
+        {
+            timeSlots.Add($"{h:00}:00");
+            if (h < 22) timeSlots.Add($"{h:00}:30");
+        }
+
+        studios = await StudioService.GetStudiosAsync();
+        if (studios.Count > 0)
+        {
+            selectedStudioId = studios[0].Id;
+            await LoadStudioData();
+        }
+
+        hub = new HubConnectionBuilder()
+            .WithUrl(Nav.ToAbsoluteUri("/hubs/booking"))
+            .Build();
+
+        hub.On<int>(BookingHub.BookingsChanged, async studioId =>
+        {
+            if (studioId == selectedStudioId)
+            {
+                bookings = await BookingService.GetBookingsForStudioAsync(selectedStudioId);
+                await InvokeAsync(StateHasChanged);
+            }
+        });
+
+        await hub.StartAsync();
+    }
+
+    private async Task OnStudioChanged()
+    {
+        message = null;
+        await LoadStudioData();
+    }
+
+    private async Task LoadStudioData()
+    {
+        services = await StudioService.GetOfferedServiceTypesAsync(selectedStudioId);
+        selectedServiceId = services.Count > 0 ? services[0].Id : 0;
+        bookings = await BookingService.GetBookingsForStudioAsync(selectedStudioId);
+    }
+
+    private DateTime ComposeStart() => date.Date + TimeSpan.Parse(selectedTime);
+
+    private async Task CheckAvailability()
+    {
+        ValidationResult result = await BookingService.ValidateBookingAsync(
+            selectedStudioId, selectedServiceId, ComposeStart(), duration);
+        SetMessage(result.IsValid, result.IsValid ? "This slot is available." : result.Error!);
+    }
+
+    private async Task Book()
+    {
+        (ValidationResult validation, Booking? booking) = await BookingService.CreateBookingAsync(
+            selectedStudioId, userId: 1, selectedServiceId, ComposeStart(), duration);
+
+        if (!validation.IsValid || booking is null)
+        {
+            SetMessage(false, validation.Error!);
+            return;
+        }
+
+        SetMessage(true, "Booking confirmed.");
+        bookings = await BookingService.GetBookingsForStudioAsync(selectedStudioId);
+
+        // Notify other connected clients so their lists refresh live
+        await HubContext.Clients.All.SendAsync(BookingHub.BookingsChanged, selectedStudioId);
+    }
+
+    private void SetMessage(bool ok, string text)
+    {
+        isError = !ok;
+        message = text;
+    }
+
+    private string ServiceName(int id) =>
+        services.FirstOrDefault(s => s.Id == id)?.Name ?? $"Service #{id}";
+
+    public async ValueTask DisposeAsync()
+    {
+        if (hub is not null)
+        {
+            await hub.DisposeAsync();
+        }
+    }
+}

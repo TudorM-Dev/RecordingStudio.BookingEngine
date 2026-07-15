@@ -1,4 +1,4 @@
-﻿using RecordingStudio.BookingEngine.Core.Common;
+using RecordingStudio.BookingEngine.Core.Common;
 using RecordingStudio.BookingEngine.Core.Entities;
 
 namespace RecordingStudio.BookingEngine.Core.Services
@@ -25,7 +25,6 @@ namespace RecordingStudio.BookingEngine.Core.Services
 
             return ValidationResult.Success();
         }
-
 
         // Validates rules that depend only on the booking's own data (no db access)
         // Rule 1 && Rule 2
@@ -67,6 +66,47 @@ namespace RecordingStudio.BookingEngine.Core.Services
             return ValidationResult.Success();
         }
 
+        // Rule 4: a studio offers a service only if it has all required facilities and the service is not excluded
+        public ValidationResult ValidateServiceOffered(
+            IEnumerable<int> studioFacilityIds,
+            IEnumerable<int> requiredFacilityIds,
+            bool isServiceExcluded)
+        {
+            if (isServiceExcluded)
+            {
+                return ValidationResult.Failure("This studio does not offer the selected service.");
+            }
 
+            HashSet<int> available = studioFacilityIds.ToHashSet();
+            bool hasAllRequired = requiredFacilityIds.All(available.Contains);
+
+            if (!hasAllRequired)
+            {
+                return ValidationResult.Failure("This studio lacks the facilities required for the selected service.");
+            }
+
+            return ValidationResult.Success();
+        }
+
+        // Rule 5: a booking cannot overlap a studio closure interval
+        public ValidationResult ValidateNotDuringClosure(
+            DateTime startDateTime,
+            int durationHours,
+            IEnumerable<StudioClosure> closures)
+        {
+            DateTime candidateStart = startDateTime;
+            DateTime candidateEnd = startDateTime.AddHours(durationHours);
+
+            foreach (StudioClosure closure in closures)
+            {
+                bool overlaps = candidateStart < closure.EndDateTime && closure.StartDateTime < candidateEnd;
+                if (overlaps)
+                {
+                    return ValidationResult.Failure("The studio is closed during the selected time.");
+                }
+            }
+
+            return ValidationResult.Success();
+        }
     }
 }

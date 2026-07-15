@@ -1,9 +1,6 @@
-﻿using RecordingStudio.BookingEngine.Core.Common;
+using RecordingStudio.BookingEngine.Core.Common;
 using RecordingStudio.BookingEngine.Core.Entities;
 using RecordingStudio.BookingEngine.Core.Services;
-using System;
-using System.Collections.Generic;
-using System.Text;
 
 namespace RecordingStudio.BookingEngine.Tests
 {
@@ -70,30 +67,61 @@ namespace RecordingStudio.BookingEngine.Tests
             Assert.Equal(expectedValid, result.IsValid);
         }
 
+        // Rule 4: service offered from facilities + exclusion
+        [Fact]
+        public void ValidateServiceOffered_WhenStudioHasAllFacilitiesAndNotExcluded_ReturnsSuccess()
+        {
+            int[] studioFacilities = { 1, 2, 3 };
+            int[] required = { 1, 2 };
 
+            ValidationResult result = _validator.ValidateServiceOffered(studioFacilities, required, isServiceExcluded: false);
 
+            Assert.True(result.IsValid);
+        }
 
-        //[Fact]
-        //public void ValidateStartTime_OnFullHour_ReturnSuccess()
-        //{
-        //    DateTime startTime = new(2026, 7    , 20,  14,  0,   0);
-        //                           //year, month, day, hr, min, sec
+        [Fact]
+        public void ValidateServiceOffered_WhenMissingARequiredFacility_ReturnsFailure()
+        {
+            int[] studioFacilities = { 1, 2, 3 };
+            int[] required = { 1, 2, 4 };
 
-        //    ValidationResult result = _validator.ValidateStartTime(startTime);
+            ValidationResult result = _validator.ValidateServiceOffered(studioFacilities, required, isServiceExcluded: false);
 
-        //    Assert.True(result.IsValid);
-        //}
+            Assert.False(result.IsValid);
+        }
 
-        //[Fact]
-        //public void ValidateStartTime_At15MinutesPast_ReturnsFail()
-        //{
-        //    DateTime startTime = new(2026, 7, 20, 14, 15, 0);
-        //    ValidationResult result = _validator.ValidateStartTime(startTime);
+        [Fact]
+        public void ValidateServiceOffered_WhenExcluded_ReturnsFailure()
+        {
+            int[] studioFacilities = { 1, 2, 3 };
+            int[] required = { 1, 2 };
 
-        //    Assert.False(result.IsValid);
+            ValidationResult result = _validator.ValidateServiceOffered(studioFacilities, required, isServiceExcluded: true);
 
-        //}
+            Assert.False(result.IsValid);
+        }
 
+        // Rule 5: not during a closure
+        private static StudioClosure ClosureFrom(DateTime start, DateTime end) =>
+            new() { StartDateTime = start, EndDateTime = end };
 
+        [Theory]
+        // Closure runs 14:00–16:00
+        [InlineData(10, true)]   // fully before -> valid
+        [InlineData(16, true)]   // starts exactly when the closure ends -> valid
+        [InlineData(14, false)]  // starts inside the closure -> invalid
+        [InlineData(15, false)]  // overlaps the closure -> invalid
+        public void ValidateNotDuringClosure_ChecksOverlap(int hour, bool expectedValid)
+        {
+            List<StudioClosure> closures = new()
+            {
+                ClosureFrom(new DateTime(2026, 7, 20, 14, 0, 0), new DateTime(2026, 7, 20, 16, 0, 0))
+            };
+            DateTime candidateStart = new(2026, 7, 20, hour, 0, 0);
+
+            ValidationResult result = _validator.ValidateNotDuringClosure(candidateStart, 2, closures);
+
+            Assert.Equal(expectedValid, result.IsValid);
+        }
     }
 }
