@@ -1,6 +1,31 @@
 @RecordingStudio.BookingEngine.Api_HostAddress = http://localhost:5237
 
-GET {{RecordingStudio.BookingEngine.Api_HostAddress}}/weatherforecast/
-Accept: application/json
+### Valid booking (on a 30-min boundary, 2 hours)
+POST {{RecordingStudio.BookingEngine.Api_HostAddress}}/api/bookings/validate
+Content-Type: application/json
 
-###
+{
+  "studioId": 1,
+  "startDateTime": "2026-07-20T14:00:00",
+  "durationHours": 2
+}
+
+### Invalid start time (14:15 is not on a 30-min boundary)
+POST {{RecordingStudio.BookingEngine.Api_HostAddress}}/api/bookings/validate
+Content-Type: application/json
+
+{
+  "studioId": 1,
+  "startDateTime": "2026-07-20T14:15:00",
+  "durationHours": 2
+}
+
+### Invalid duration (only 1 hour)
+POST {{RecordingStudio.BookingEngine.Api_HostAddress}}/api/bookings/validate
+Content-Type: application/json
+
+{
+  "studioId": 1,
+  "startDateTime": "2026-07-20T14:00:00",
+  "durationHours": 1
+}
