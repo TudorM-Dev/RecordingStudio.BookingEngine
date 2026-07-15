@@ -16,4 +16,8 @@
     <ProjectReference Include="..\RecordingStudio.BookingEngine.Core\RecordingStudio.BookingEngine.Core.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <Folder Include="Controllers\" />
+  </ItemGroup>
+
 </Project>
