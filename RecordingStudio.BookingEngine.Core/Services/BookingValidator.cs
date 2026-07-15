@@ -1,4 +1,5 @@
 ﻿using RecordingStudio.BookingEngine.Core.Common;
+using RecordingStudio.BookingEngine.Core.Entities;
 
 namespace RecordingStudio.BookingEngine.Core.Services
 {
@@ -38,5 +39,34 @@ namespace RecordingStudio.BookingEngine.Core.Services
 
             return ValidationResult.Success();
         }
+
+        private static readonly TimeSpan Buffer = TimeSpan.FromMinutes(30);
+
+        // Rule 3: at least a 30-minute gap between bookings at the same studio
+        public ValidationResult ValidateNoOverlap(
+            DateTime startDateTime,
+            int durationHours,
+            IEnumerable<Booking> existingBookings)
+        {
+            DateTime candidateStart = startDateTime;
+            DateTime candidateEnd = startDateTime.AddHours(durationHours);
+
+            foreach (Booking existing in existingBookings)
+            {
+                // Inflate each existing booking by the buffer on both sides
+                DateTime blockedStart = existing.StartDateTime.Subtract(Buffer);
+                DateTime blockedEnd = existing.StartDateTime.AddHours(existing.DurationHours).Add(Buffer);
+
+                bool overlaps = candidateStart < blockedEnd && blockedStart < candidateEnd;
+                if (overlaps)
+                {
+                    return ValidationResult.Failure("This time slot conflicts with an existing booking (including the required 30-minute buffer).");
+                }
+            }
+
+            return ValidationResult.Success();
+        }
+
+
     }
 }

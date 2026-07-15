@@ -1,4 +1,5 @@
 ﻿using RecordingStudio.BookingEngine.Core.Common;
+using RecordingStudio.BookingEngine.Core.Entities;
 using RecordingStudio.BookingEngine.Core.Services;
 using System;
 using System.Collections.Generic;
@@ -33,10 +34,39 @@ namespace RecordingStudio.BookingEngine.Tests
         [InlineData(-1, false)]
         public void ValidateDuration_ChecksMinimumTwoHours(int durationHours, bool expectedValid)
         {
-            // Act
             ValidationResult result = _validator.ValidateDuration(durationHours);
 
-            // Assert
+            Assert.Equal(expectedValid, result.IsValid);
+        }
+
+        // Helper: build a booking with only the fields the overlap check cares about
+        private static Booking BookingAt(DateTime start, int durationHours) =>
+            new() { StartDateTime = start, DurationHours = durationHours };
+
+        [Fact]
+        public void ValidateNoOverlap_WithNoExistingBookings_ReturnsSuccess()
+        {
+            DateTime start = new(2026, 7, 20, 14, 0, 0);
+            List<Booking> existing = new();
+
+            ValidationResult result = _validator.ValidateNoOverlap(start, 2, existing);
+
+            Assert.True(result.IsValid);
+        }
+
+        [Theory]
+        [InlineData(10, 0, true)]
+        [InlineData(16, 30, true)]
+        [InlineData(16, 0, false)]
+        [InlineData(16, 15, false)]
+        [InlineData(15, 0, false)]
+        public void ValidateNoOverlap_ChecksBufferAgainstExistingBooking(int hour, int minute, bool expectedValid)
+        {
+            List<Booking> existing = new() { BookingAt(new DateTime(2026, 7, 20, 14, 0, 0), 2) };
+            DateTime candidateStart = new(2026, 7, 20, hour, minute, 0);
+
+            ValidationResult result = _validator.ValidateNoOverlap(candidateStart, 2, existing);
+
             Assert.Equal(expectedValid, result.IsValid);
         }
 
