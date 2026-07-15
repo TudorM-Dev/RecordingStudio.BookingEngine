@@ -1,5 +1,8 @@
 # RecordingStudio.BookingEngine
 
+<img width="1899" height="947" alt="image" src="https://github.com/user-attachments/assets/50e086cf-4e40-4fd9-9c58-7ca37262d800" />
+
+
 Booking backend for recording-studio sessions. A client picks a studio, a day, a start time, a duration and a service type; the engine validates the request against the studio's schedule and availability.
 
 It's a single ASP.NET Core application split into four projects, so the booking logic stays independent of the web and database layers. Stack: .NET 10 / C#, EF Core (SQLite for local dev, SQL Server as the production target), SignalR for live slot updates, a minimal Blazor frontend, and xUnit for tests.
