@@ -2,10 +2,13 @@
 
 <img width="1899" height="947" alt="image" src="https://github.com/user-attachments/assets/50e086cf-4e40-4fd9-9c58-7ca37262d800" />
 
+**Booking backend for recording-studio sessions.** A client picks a studio, a day, a start time, a
+duration and a service type. The engine checks that request against the studio's schedule, the
+facilities that studio has, and everything already on the calendar.
 
-Booking backend for recording-studio sessions. A client picks a studio, a day, a start time, a duration and a service type; the engine validates the request against the studio's schedule and availability.
-
-It's a single ASP.NET Core application split into four projects, so the booking logic stays independent of the web and database layers. Stack: .NET 10 / C#, EF Core (SQLite for local dev, SQL Server as the production target), SignalR for live slot updates, a minimal Blazor frontend, and xUnit for tests.
+One ASP.NET Core application in four projects, so the booking rules stay clear of the web and
+database layers. .NET 10 and C#, EF Core over SQLite locally with SQL Server as the production
+target, SignalR for live slot updates, a small Blazor frontend, xUnit for the tests.
 
 ## Architecture
 
@@ -26,7 +29,10 @@ graph TD
     class Core core;
 ```
 
-Dependencies point inward: `Api → Infrastructure → Core`, plus `Api → Core`. `Core` references nothing, so the validation logic is unit-testable without a database. Data access is inverted — `Core` defines the interfaces (e.g. `IBookingRepository`), `Infrastructure` implements them with EF Core.
+Dependencies point inward: `Api → Infrastructure → Core`, plus `Api → Core`. I kept `Core`
+referencing nothing at all, so the validation logic is unit-testable with no database in the way.
+Data access is inverted the same way: `Core` declares the interfaces it needs, `IBookingRepository`
+among them, and `Infrastructure` implements them with EF Core.
 
 ## Database schema
 
@@ -94,14 +100,22 @@ erDiagram
 
 ## Booking rules
 
-The core of the project. A booking is validated against six rules:
+A booking has to clear six rules before anything is written:
 
-1. **Start time** must fall on a 30-minute boundary — `14:00`, `14:30`, `15:00`, and so on.
-2. **Duration** is at least 2 hours, in whole-hour steps. It's an `int`, so fractional durations can't even be expressed.
-3. **A 30-minute buffer** is required between two consecutive bookings at the same studio (logistics, sound engineer). Overlap checks inflate every existing booking by 30 minutes on each side.
-4. **Services are derived from facilities**, not toggled by hand. A studio offers a service if it has all the required facilities *and* the service isn't in its manual exclusion list.
-5. **Closures span a start/end interval** rather than whole days, which also covers the all-day case when needed.
-6. **A closure cancels overlapping bookings** — when an admin closes a studio over an interval that hits confirmed bookings, those move to `Cancelled`. Contacting the client stays a manual task.
+1. **Start time** falls on a 30-minute boundary. `14:00`, `14:30`, `15:00`, and so on.
+2. **Duration** is at least 2 hours, in whole-hour steps. I made the field an `int`, so a fractional
+   duration cannot even be expressed.
+3. **A 30-minute buffer** sits between two consecutive bookings at the same studio. I put it there
+   for logistics and for the sound engineer, and the overlap checks pay for it by inflating every
+   existing booking by 30 minutes on each side.
+4. **Services are derived from facilities.** A studio offers a service when it has every facility
+   that service requires, and when the service is absent from its exclusion list, which is the only
+   part an admin sets by hand.
+5. **Closures span a start and an end datetime**, so an afternoon off and a whole week both use the
+   same shape.
+6. **A closure cancels overlapping bookings.** When an admin closes a studio over an interval that
+   catches confirmed bookings, those move to `Cancelled`, though telling the client is still a
+   manual step.
 
 ## API
 
@@ -112,11 +126,13 @@ The core of the project. A booking is validated against six rules:
 | `GET`  | `/api/bookings/studio/{id}` | Confirmed bookings for a studio |
 | `POST` | `/api/bookings/validate` | Check a booking against every rule without saving |
 | `POST` | `/api/bookings` | Create a booking (validated, then persisted) |
-| `POST` | `/api/closures` | Register a closure; auto-cancels overlapping bookings (rule 6) |
+| `POST` | `/api/closures` | Register a closure, auto-cancelling overlapping bookings (rule 6) |
 
 ## Web UI
 
-A minimal Blazor (interactive server) page at `/` lets a client pick a studio, see only the services it offers, choose a slot and book. A SignalR hub (`/hubs/booking`) pushes booking changes so open pages refresh live — book in one tab and a second tab updates on its own.
+A minimal Blazor page at `/`, interactive server mode, lets a client pick a studio, see only the
+services that studio can offer, choose a slot and book. A SignalR hub at `/hubs/booking` pushes
+booking changes out to open pages. Book in one tab and a second tab updates on its own.
 
 ## Layout
 
@@ -136,9 +152,12 @@ dotnet run --project RecordingStudio.BookingEngine.Api --launch-profile http
 dotnet test
 ```
 
-Then open **http://localhost:5237** for the booking UI. Open it in two tabs to watch SignalR update one when you book in the other.
+Then open **http://localhost:5237**. Open it in two tabs to watch SignalR update one while you book
+in the other.
 
-The migration step creates the local SQLite database (seeded with two studios, some facilities and services). Moving to SQL Server means swapping the EF Core provider package, the `UseSqlite` call and the connection string — nothing else changes.
+The migration step creates the local SQLite database, seeded with two studios and a handful of
+facilities and services. Three things change when this moves to SQL Server: the EF Core provider
+package, the `UseSqlite` call and the connection string.
 
 ## Status
 
@@ -152,3 +171,9 @@ The migration step creates the local SQLite database (seeded with two studios, s
 - [x] API endpoints
 - [x] Blazor frontend
 - [x] SignalR live updates
+
+---
+
+Built as a portfolio project, to have somewhere real to put schedule validation. The six rules live
+in `RecordingStudio.BookingEngine.Core`, where the unit tests reach them without a database being
+involved, and that is the whole reason the solution is split the way it is.
